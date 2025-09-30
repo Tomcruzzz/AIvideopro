@@ -9,6 +9,10 @@ interface TimelineProps {
   onClipDelete: (clipId: string) => void;
   onClipSelect: (clipId: string | null) => void;
   selectedClipId: string | null;
+  currentTime?: number;
+  isPlaying?: boolean;
+  onTimeUpdate?: (time: number) => void;
+  onPlayingChange?: (playing: boolean) => void;
 }
 
 export function Timeline({
@@ -17,10 +21,34 @@ export function Timeline({
   onClipUpdate,
   onClipDelete,
   onClipSelect,
-  selectedClipId
+  selectedClipId,
+  currentTime: externalCurrentTime,
+  isPlaying: externalIsPlaying,
+  onTimeUpdate,
+  onPlayingChange
 }: TimelineProps) {
-  const [currentTime, setCurrentTime] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(false);
+  const [internalCurrentTime, setInternalCurrentTime] = useState(0);
+  const [internalIsPlaying, setInternalIsPlaying] = useState(false);
+
+  const currentTime = externalCurrentTime !== undefined ? externalCurrentTime : internalCurrentTime;
+  const isPlaying = externalIsPlaying !== undefined ? externalIsPlaying : internalIsPlaying;
+
+  const setCurrentTime = (time: number | ((prev: number) => number)) => {
+    const newTime = typeof time === 'function' ? time(currentTime) : time;
+    if (onTimeUpdate) {
+      onTimeUpdate(newTime);
+    } else {
+      setInternalCurrentTime(newTime);
+    }
+  };
+
+  const setIsPlaying = (playing: boolean) => {
+    if (onPlayingChange) {
+      onPlayingChange(playing);
+    } else {
+      setInternalIsPlaying(playing);
+    }
+  };
   const [zoom, setZoom] = useState(1);
   const [draggedClip, setDraggedClip] = useState<string | null>(null);
   const timelineRef = useRef<HTMLDivElement>(null);

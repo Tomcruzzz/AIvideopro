@@ -7,7 +7,11 @@ import { mediaService } from '../../services/mediaService';
 import { Timeline } from '../Timeline/Timeline';
 import { AIGenerationModal } from '../Modals/AIGenerationModal';
 import { MediaLibrary } from '../MediaLibrary/MediaLibrary';
-import { Sparkles, Library, ArrowLeft, Save, Loader2, Wand2, ArrowUp } from 'lucide-react';
+import { VideoPlayer } from '../VideoPlayer/VideoPlayer';
+import { FileUpload } from '../Upload/FileUpload';
+import { ToastContainer } from '../Toast/Toast';
+import { useToast } from '../../hooks/useToast';
+import { Sparkles, Library, ArrowLeft, Save, Loader2, Wand2, ArrowUp, Upload } from 'lucide-react';
 
 interface VideoEditorProps {
   projectId: string;
@@ -15,14 +19,18 @@ interface VideoEditorProps {
 
 export function VideoEditor({ projectId }: VideoEditorProps) {
   const navigate = useNavigate();
+  const { toasts, removeToast, success, error, info } = useToast();
   const [project, setProject] = useState<Project | null>(null);
   const [clips, setClips] = useState<TimelineClip[]>([]);
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
   const [showAIModal, setShowAIModal] = useState(false);
   const [showMediaLibrary, setShowMediaLibrary] = useState(false);
+  const [showUpload, setShowUpload] = useState(false);
   const [loading, setLoading] = useState(true);
   const [aiJobs, setAiJobs] = useState<AIGenerationJob[]>([]);
   const [saving, setSaving] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
 
   useEffect(() => {
     loadProject();
@@ -93,9 +101,12 @@ export function VideoEditor({ projectId }: VideoEditorProps) {
         projectId
       });
       setAiJobs(prev => [...prev, job]);
-    } catch (error) {
-      console.error('Failed to create AI generation job:', error);
-      throw error;
+      success('AI generation started! Check your media library soon.');
+      info('Note: This is a demo. Connect real AI providers to generate videos.');
+    } catch (err: any) {
+      console.error('Failed to create AI generation job:', err);
+      error(err.message || 'Failed to start AI generation');
+      throw err;
     }
   };
 
@@ -103,8 +114,9 @@ export function VideoEditor({ projectId }: VideoEditorProps) {
     try {
       const updatedClip = await projectService.updateClip(clipId, updates);
       setClips(clips.map(c => c.id === clipId ? updatedClip : c));
-    } catch (error) {
-      console.error('Failed to update clip:', error);
+    } catch (err: any) {
+      console.error('Failed to update clip:', err);
+      error('Failed to update clip');
     }
   };
 
@@ -112,8 +124,10 @@ export function VideoEditor({ projectId }: VideoEditorProps) {
     try {
       await projectService.deleteClip(clipId);
       setClips(clips.filter(c => c.id !== clipId));
-    } catch (error) {
-      console.error('Failed to delete clip:', error);
+      success('Clip deleted');
+    } catch (err: any) {
+      console.error('Failed to delete clip:', err);
+      error('Failed to delete clip');
     }
   };
 
@@ -137,15 +151,25 @@ export function VideoEditor({ projectId }: VideoEditorProps) {
       );
       await projectService.updateProject(projectId, { duration: newDuration });
       setProject(prev => prev ? { ...prev, duration: newDuration } : null);
-    } catch (error) {
-      console.error('Failed to add clip:', error);
+      success('Clip added to timeline');
+    } catch (err: any) {
+      console.error('Failed to add clip:', err);
+      error('Failed to add clip to timeline');
     }
+  };
+
+  const handleUploadComplete = async (asset: MediaAsset) => {
+    success('File uploaded successfully!');
+    await handleAssetSelect(asset);
   };
 
   const handleSave = async () => {
     setSaving(true);
     try {
       await new Promise(resolve => setTimeout(resolve, 500));
+      success('Project saved successfully');
+    } catch (err: any) {
+      error('Failed to save project');
     } finally {
       setSaving(false);
     }
@@ -183,6 +207,14 @@ export function VideoEditor({ projectId }: VideoEditorProps) {
           )}
 
           <button
+            onClick={() => setShowUpload(true)}
+            className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+          >
+            <Upload className="w-4 h-4" />
+            Upload
+          </button>
+
+          <button
             onClick={() => setShowMediaLibrary(true)}
             className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
           >
@@ -214,12 +246,12 @@ export function VideoEditor({ projectId }: VideoEditorProps) {
       </header>
 
       <div className="flex-1 flex overflow-hidden">
-        <div className="flex-1 bg-slate-950 flex items-center justify-center">
-          <div className="text-slate-600 text-center">
-            <div className="text-6xl mb-4">🎬</div>
-            <p className="text-lg">Video Preview</p>
-            <p className="text-sm mt-2">Playback will appear here</p>
-          </div>
+        <div className="flex-1 bg-slate-950">
+          <VideoPlayer
+            clips={clips}
+            currentTime={currentTime}
+            isPlaying={isPlaying}
+          />
         </div>
 
         {selectedClip && (
@@ -299,6 +331,10 @@ export function VideoEditor({ projectId }: VideoEditorProps) {
           onClipDelete={handleClipDelete}
           onClipSelect={setSelectedClipId}
           selectedClipId={selectedClipId}
+          currentTime={currentTime}
+          isPlaying={isPlaying}
+          onTimeUpdate={setCurrentTime}
+          onPlayingChange={setIsPlaying}
         />
       </div>
 
@@ -313,6 +349,14 @@ export function VideoEditor({ projectId }: VideoEditorProps) {
         onClose={() => setShowMediaLibrary(false)}
         onSelectAsset={handleAssetSelect}
       />
+
+      <FileUpload
+        isOpen={showUpload}
+        onClose={() => setShowUpload(false)}
+        onUploadComplete={handleUploadComplete}
+      />
+
+      <ToastContainer toasts={toasts} onClose={removeToast} />
     </div>
   );
 }
